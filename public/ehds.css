@@ -1,0 +1,335 @@
+/* Additions to the CareSets stylesheet (styles.css) for the EHDS site. */
+
+.stage-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(30, 50, 70, 0.22);
+  white-space: nowrap;
+}
+
+.side-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-left: 6px;
+  vertical-align: 1px;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.kind-badge {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+.map-cell {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.bar {
+  display: inline-block;
+  vertical-align: middle;
+  width: 90px;
+  height: 8px;
+  border-radius: 4px;
+  background: #e6ebf0;
+  overflow: hidden;
+  margin-right: 6px;
+}
+
+.bar > span {
+  display: block;
+  height: 100%;
+  float: left;
+}
+
+.bar .b-mapped { background: var(--viz-mapped); }
+.bar .b-nomap { background: var(--viz-nomap); margin-left: 1px; }
+
+:root {
+  --viz-mapped: #257de0;
+  --viz-nomap: #f47230;
+  --viz-open: #d9dee5;
+  --viz-grid: #e8ecf0;
+}
+
+/* views inside the drawer: tree, diagrams, PlantUML, JSON */
+.view-tabs {
+  margin: 16px 0 10px;
+}
+
+.tree {
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: #fbfcfd;
+  overflow: auto;
+}
+
+.tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 18px;
+  border-left: 1px dotted var(--line-strong);
+}
+
+.tree > ul {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.tree li {
+  margin: 1px 0;
+}
+
+.tree summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.tree summary::-webkit-details-marker {
+  display: none;
+}
+
+.tree summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 14px;
+  color: var(--muted);
+}
+
+.tree details[open] > summary::before {
+  content: '▾';
+}
+
+.tree .leaf::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+}
+
+.tree .t-name {
+  font-weight: 600;
+}
+
+.tree .t-card {
+  color: var(--accent);
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tree .t-type {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #3d5a73;
+}
+
+.tree .t-short {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tree .t-map {
+  margin-left: 8px;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 0 5px;
+  color: #fff;
+}
+
+.t-map.mapped { background: var(--viz-mapped); }
+.t-map.no-map { background: var(--viz-nomap); }
+
+.puml-source {
+  max-height: 60vh;
+  overflow: auto;
+  font-size: 12px;
+  background: #f6f8fa;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  white-space: pre;
+}
+
+.figure-tools {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 6px 0;
+}
+
+.side-by-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.side-by-side h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lines-table td,
+.lines-table th {
+  font-size: 12.5px;
+}
+
+.lines-table tr.st-open td {
+  color: var(--muted);
+}
+
+.remark {
+  white-space: pre-wrap;
+}
+
+.notice {
+  border: 1px solid #f0d58a;
+  background: #fff9e6;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.notice.problem {
+  border-color: #f1b7b7;
+  background: #fff2f2;
+}
+
+/* progress */
+.stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  min-width: 160px;
+  box-shadow: var(--shadow);
+}
+
+.stat .v {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat .l {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.chart-card h3 {
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.chart-card .sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--ink);
+  margin: 4px 0 8px;
+}
+
+.chart-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart text {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+.chart .dlabel {
+  fill: var(--ink);
+  font-size: 11.5px;
+}
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+  padding: 6px 9px;
+  font-size: 12px;
+  min-width: 170px;
+  z-index: 5;
+}
+
+.tooltip .tt-head {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.tooltip .tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tooltip .tt-row i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+}
+
+details.table-view {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+details.table-view summary {
+  cursor: pointer;
+  color: var(--accent);
+}

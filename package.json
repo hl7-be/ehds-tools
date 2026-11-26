@@ -1,0 +1,25 @@
+{
+  "name": "ehds-tools",
+  "version": "0.1.0",
+  "description": "EHDS logical models and profiles: fetch, diagrams (tree, modelgram, UML), mappings to the Belgian models, progress",
+  "type": "module",
+  "license": "CC0-1.0",
+  "bin": {
+    "ehds-tools": "src/cli.js"
+  },
+  "scripts": {
+    "setup": "node scripts/fetch-plantuml.js",
+    "postinstall": "node scripts/fetch-plantuml.js || exit 0",
+    "fetch": "node src/cli.js fetch",
+    "build": "node src/cli.js site",
+    "start": "node src/cli.js serve --open",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pako": "^2.1.0",
+    "tar": "^7.4.3"
+  }
+}

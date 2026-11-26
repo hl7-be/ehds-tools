@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EHDS Models — logical models, profiles and Belgian mappings</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="ehds.css" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23F7EFB5'/%3E%3Crect x='6' y='7' width='20' height='6' rx='2' fill='%23274357'/%3E%3Crect x='6' y='16' width='20' height='3' rx='1.5' fill='%23274357' opacity='.55'/%3E%3Crect x='6' y='22' width='13' height='3' rx='1.5' fill='%23274357' opacity='.55'/%3E%3C/svg%3E"
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>EHDS Models</h1>
+          <p>EHDS logical models and profiles — diagrams, mappings to the Belgian models, progress</p>
+        </div>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button class="tab is-active" data-view="models" role="tab">Models</button>
+        <button class="tab" data-view="mappings" role="tab">Mappings</button>
+        <button class="tab" data-view="progress" role="tab">Progress</button>
+        <button class="tab" data-view="profiles" role="tab">Profiles</button>
+      </nav>
+
+      <div class="env" id="env"></div>
+    </header>
+
+    <main>
+      <!-- ============================ MODELS ============================ -->
+      <section class="view is-active" id="view-models">
+        <div class="toolbar">
+          <input type="search" id="search" placeholder="Filter by name, title, package…" autocomplete="off" />
+          <div class="chips" id="side-filter"></div>
+          <div class="chips" id="kind-filter"></div>
+
+          <label class="field">
+            <span>Group by</span>
+            <select id="group-by">
+              <option value="package" selected>Package</option>
+              <option value="side">Side</option>
+              <option value="stage">Status</option>
+              <option value="none">Nothing</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Layout</span>
+            <select id="layout">
+              <option value="table" selected>Table</option>
+              <option value="gallery">Gallery</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Diagram</span>
+            <select id="diagram-kind" title="Which diagram the thumbnails and gallery show">
+              <option value="modelgram" selected>PlantUML (modelgram)</option>
+              <option value="uml">UML class diagram</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Variants</span>
+            <select id="variant-show" title="What to show when the same model came from several sources">
+              <option value="preferred" selected>Whichever prevails</option>
+              <option value="all">Every variant</option>
+            </select>
+          </label>
+
+          <div class="spacer"></div>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div id="models-body"></div>
+      </section>
+
+      <!-- =========================== MAPPINGS =========================== -->
+      <section class="view" id="view-mappings">
+        <div class="toolbar">
+          <input type="search" id="map-search" placeholder="Filter by model…" autocomplete="off" />
+          <div class="chips" id="map-filter"></div>
+          <div class="spacer"></div>
+          <span class="hint" id="map-summary"></span>
+        </div>
+        <div id="mappings-body"></div>
+      </section>
+
+      <!-- =========================== PROGRESS =========================== -->
+      <section class="view" id="view-progress">
+        <div id="progress-body"></div>
+      </section>
+
+      <!-- =========================== PROFILES =========================== -->
+      <section class="view" id="view-profiles">
+        <div id="profiles-body"></div>
+      </section>
+    </main>
+
+    <div class="drawer" id="drawer" hidden>
+      <div class="drawer-scrim" data-close></div>
+      <div class="drawer-body">
+        <button class="drawer-close" data-close aria-label="Close">&times;</button>
+        <div id="drawer-content"></div>
+      </div>
+    </div>
+
+    <div class="toasts" id="toasts"></div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

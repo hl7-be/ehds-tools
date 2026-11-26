@@ -1,0 +1,33 @@
+{
+  "ehds": {
+    "url": "https://github.com/EEHRxF/logical-model/",
+    "ref": "main",
+    "mode": "auto",
+    "packageUrl": null,
+    "kinds": ["logical", "profile"]
+  },
+  "belgian": {
+    "$comment": "Same list as the CareSets tool (caresets.json). Kinds: release (packageId, version 'latest' or a specific one), ci (from = a build.fhir.org address, or repo + branch, owner defaults to hl7-be), url (one StructureDefinition JSON). Optional: package (grouping label), names (only these). When the same model comes from two sources, the first one listed prevails.",
+    "kinds": ["logical", "profile"],
+    "sources": [
+      { "kind": "release", "packageId": "hl7.fhir.be.core-clinical", "version": "latest" },
+      { "kind": "release", "packageId": "hl7.fhir.be.allergy", "version": "latest" },
+      { "kind": "release", "packageId": "hl7.fhir.be.medication", "version": "latest" },
+      { "kind": "release", "packageId": "hl7.fhir.be.patient-care", "version": "latest" },
+      { "kind": "release", "packageId": "hl7.fhir.be.vaccination", "version": "latest" },
+      { "kind": "release", "packageId": "hl7.fhir.be.patientwill", "version": "latest" },
+      { "kind": "release", "packageId": "hl7.fhir.be.patient-dossier", "version": "latest" },
+      {
+        "kind": "ci",
+        "from": "https://build.fhir.org/ig/hl7-be/patient-dossier/branches/clinical-report/en/",
+        "package": "Patient Dossier"
+      }
+    ]
+  },
+  "output": "data",
+  "site": "site",
+  "mappings": {
+    "dir": "mappings",
+    "canonical": "https://www.ehealth.fgov.be/standards/fhir/ehds/ConceptMap"
+  }
+}

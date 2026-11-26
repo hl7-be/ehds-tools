@@ -1,0 +1,77 @@
+name: Build the EHDS models site
+
+# Fetches the EHDS models (configured repository) and the Belgian models (ehds-tools.config.json),
+# renders the diagrams, compares the mappings and publishes the site on GitHub Pages.
+# Preview the same site locally with: npm start
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit of the EHDS repository (empty = configured ref)
+        required: false
+      mode:
+        description: auto | published | source
+        required: false
+        default: auto
+  schedule:
+    - cron: '17 5 * * *' # daily
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # mapping progress is read from the git history of mappings/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            vendor
+            .cache/diagrams
+          key: diagrams-${{ github.run_id }}
+          restore-keys: diagrams-
+      - run: npm ci # also downloads vendor/plantuml.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm test
+      - name: Install SUSHI (used when no published EHDS package is available)
+        run: npm install -g fsh-sushi
+      - name: Fetch, render, compare and build the site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EHDS_SOURCE_REF: ${{ inputs.ref }}
+          EHDS_SOURCE_MODE: ${{ inputs.mode }}
+        run: node src/cli.js site --fetch
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
