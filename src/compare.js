@@ -1,4 +1,5 @@
 import { modelElements } from './catalog.js';
+import { loadCompositions, placeModels, placeTargets } from './compositions.js';
 import { readCatalog, readModel } from './fetch.js';
 import { loadMappings, mappingGroups } from './mappings.js';
 
@@ -112,5 +113,18 @@ export async function runCompare(config, { maps } = {}) {
   const models = await Promise.all(preferred.filter((m) => m.side === 'ehds').map(load));
   const targets = new Map((await Promise.all(preferred.filter((m) => m.side === 'be').map(load))).map((t) => [t.entry.url, t]));
   const groups = mappingGroups(maps ?? (await loadMappings(config.mappings.dir)));
-  return { ...compare(models, groups, targets), source: catalog.sides.ehds };
+  const report = { ...compare(models, groups, targets), source: catalog.sides.ehds };
+  return placeReport(report, models, await loadCompositions(config.compositions));
+}
+
+/** Add the compositions to a report: place on each EHDS model, the Belgian models mapped to them. */
+export function placeReport(report, models, compositions) {
+  const logical = models.filter((m) => m.entry.kind === 'logical');
+  const { places, compositions: list, unknown } = placeModels(logical, compositions);
+  const nameOf = new Map(models.map((m) => [m.entry.key, m.entry.name]));
+  for (const m of report.models) m.place = places.get(nameOf.get(m.key)) ?? null;
+  report.compositions = list;
+  report.placedTargets = Object.fromEntries(placeTargets(report));
+  report.unknownPlacements = unknown;
+  return report;
 }

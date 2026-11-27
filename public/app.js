@@ -13,6 +13,11 @@ const STAGES = {
 const SIDES = { ehds: 'EHDS', be: 'Belgian' };
 const KINDS = { logical: 'Logical models', profile: 'Profiles' };
 const DIAGRAM_LABELS = { modelgram: 'PlantUML (modelgram)', uml: 'UML class diagram' };
+// the place of a model (compositions.json): focus of a composition, a first-level section, a
+// supporting model, a building block (component); Belgian models not mapped yet are not placed
+const TIERS = { focus: 'Focus', section: 'Sections', supporting: 'Supporting', component: 'Components', unplaced: 'Not placed' };
+const TIER_LABEL = { focus: 'Focus', section: 'Section', supporting: 'Supporting', component: 'Component', unplaced: 'Not placed' };
+const TIER_RANK = { focus: 0, section: 1, supporting: 2, component: 3, unplaced: 4 };
 
 const state = { catalog: null, comparison: null, progress: null, byKey: new Map(), compareByKey: new Map(), targetIndex: new Map() };
 const ui = {
@@ -20,14 +25,16 @@ const ui = {
   search: '',
   sides: new Set(['ehds', 'be']),
   kinds: new Set(['logical']),
-  groupBy: 'package',
+  tiers: new Set(['focus', 'section', 'supporting', 'unplaced']), // components hidden by default
+  groupBy: 'composition',
   layout: 'table',
   diagram: 'modelgram',
   variantShow: 'preferred',
-  sort: { key: 'name', dir: 1 },
+  sort: { key: 'role', dir: 1 },
   mapSearch: '',
   mapFilter: 'all', // all | mapped | remarks | outdated | unmapped
-  progressScope: 'all', // all | mapped: denominator of the progress chart
+  mapComposition: 'all', // all | core | <composition id> | supporting | component
+  progressScope: 'all', // all | mapped | core | comp:<id>: denominator of the progress chart
 };
 
 // ---------------------------------------------------------------- helpers
@@ -178,9 +185,12 @@ function render() {
 
 // ---------------------------------------------------------------- models view
 
+const tierOf = (m) => m.place?.tier ?? 'unplaced';
+const compositionTitle = (id) => state.catalog.compositions?.find((c) => c.id === id)?.title ?? id;
+
 function drawChips() {
   const count = (which, key) =>
-    state.catalog.models.filter((m) => m.preferred && (which === 'side' ? m.side === key : m.kind === key)).length;
+    state.catalog.models.filter((m) => m.preferred && (which === 'side' ? m.side === key : which === 'tier' ? tierOf(m) === key && ui.sides.has(m.side) && ui.kinds.has(m.kind) : m.kind === key)).length;
   const chips = (host, options, set, which) =>
     setChildren(
       host,
@@ -198,6 +208,7 @@ function drawChips() {
     );
   chips(document.getElementById('side-filter'), SIDES, ui.sides, 'side');
   chips(document.getElementById('kind-filter'), KINDS, ui.kinds, 'kind');
+  chips(document.getElementById('tier-filter'), TIERS, ui.tiers, 'tier');
 }
 
 function wireModelsToolbar() {
@@ -232,11 +243,19 @@ function visibleModels() {
       (ui.variantShow === 'all' || m.preferred) &&
       ui.sides.has(m.side) &&
       ui.kinds.has(m.kind) &&
-      (!q || [m.name, m.title, m.package?.label, m.id, m.url].some((v) => v && v.toLowerCase().includes(q))),
+      ui.tiers.has(tierOf(m)) &&
+      (!q || [m.name, m.title, m.package?.label, m.id, m.url, ...(m.place?.tags ?? []).map((t) => `#${t}`), ...(m.place?.compositions ?? []).map((c) => c.section)].some((v) => v && v.toLowerCase().includes(q))),
   );
 }
 
 const SORTERS = {
+  // within a composition: focus first, then the sections in the order of the focus model
+  // (no group: compositions in their order first), the EHDS model before the Belgian ones mapped to it
+  role: (m, group) => {
+    const c = m.place?.compositions.find((x) => x.id === group) ?? m.place?.compositions[0];
+    const comp = c ? (state.catalog.compositions ?? []).findIndex((x) => x.id === c.id) : 999;
+    return [group ? 0 : comp, TIER_RANK[c?.role ?? tierOf(m)], c ? c.order : 999, m.side === 'be' ? 1 : 0, (m.name ?? m.id).toLowerCase()];
+  },
   name: (m) => m.name.toLowerCase(),
   package: (m) => m.package?.label ?? '',
   stage: (m) => m.stage,
@@ -245,6 +264,36 @@ const SORTERS = {
   date: (m) => m.date ?? '',
   mapping: (m) => mappingScore(m),
 };
+
+const SUPPORTING_GROUP = '~supporting';
+const COMPONENT_GROUP = '~component';
+
+/** The groups a model is listed in: a model in two compositions is listed in both. */
+function groupKeys(m) {
+  if (ui.groupBy !== 'composition') return [groupKey(m)];
+  const comps = m.place?.compositions ?? [];
+  if (comps.length) return [...new Set(comps.map((c) => `comp:${c.id}`))];
+  if (m.side === 'ehds') return [m.place?.tier === 'component' ? COMPONENT_GROUP : SUPPORTING_GROUP];
+  return [`${SIDES[m.side]} · ${m.package?.label ?? '—'}`];
+}
+
+function groupLabel(key) {
+  if (key.startsWith('comp:')) return compositionTitle(key.slice(5));
+  if (key === SUPPORTING_GROUP) return 'EHDS · Supporting models';
+  if (key === COMPONENT_GROUP) return 'EHDS · Components';
+  return key;
+}
+
+/** Compositions in the order of compositions.json, then supporting, components, Belgian packages. */
+function groupOrder(a, b) {
+  const rank = (k) => {
+    if (k.startsWith('comp:')) return (state.catalog.compositions ?? []).findIndex((c) => `comp:${c.id}` === k);
+    if (k === SUPPORTING_GROUP) return 1000;
+    if (k === COMPONENT_GROUP) return 1001;
+    return k.startsWith('EHDS') ? 999 : 2000;
+  };
+  return rank(a) - rank(b) || a.localeCompare(b);
+}
 
 function groupKey(m) {
   if (ui.groupBy === 'package') return m.package?.label === SIDES[m.side] ? SIDES[m.side] : `${SIDES[m.side]} · ${m.package?.label ?? '—'}`;
@@ -258,45 +307,57 @@ function renderModels() {
   const models = visibleModels();
   if (!models.length) return setChildren(host, el('div', { class: 'empty' }, el('h3', { text: 'Nothing matches that filter' })));
 
-  const sorter = SORTERS[ui.sort.key] ?? SORTERS.name;
-  const sorted = [...models].sort((a, b) => {
-    const av = sorter(a);
-    const bv = sorter(b);
-    if (av < bv) return -ui.sort.dir;
-    if (av > bv) return ui.sort.dir;
-    return a.name.localeCompare(b.name);
-  });
   const groups = new Map();
-  for (const m of sorted) {
-    const k = groupKey(m);
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(m);
+  for (const m of models) {
+    for (const k of groupKeys(m)) {
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(m);
+    }
   }
-  // EHDS first, then Belgian packages alphabetically
-  const order = (a, b) => (a[0].startsWith('EHDS') === b[0].startsWith('EHDS') ? a[0].localeCompare(b[0]) : a[0].startsWith('EHDS') ? -1 : 1);
+  const sorter = SORTERS[ui.sort.key] ?? SORTERS.name;
+  const sortIn = (items, group) =>
+    items.sort((a, b) => {
+      const c = compareValues(sorter(a, group), sorter(b, group));
+      return c ? c * ui.sort.dir : a.name.localeCompare(b.name);
+    });
   setChildren(
     host,
-    ...[...groups.entries()].sort(order).map(([key, items]) =>
-      el('section', { class: 'group' }, key ? groupHead(key, items) : null, ui.layout === 'gallery' ? gallery(items) : table(items)),
-    ),
+    ...[...groups.entries()].sort((a, b) => groupOrder(a[0], b[0])).map(([key, items]) => {
+      const group = key.startsWith('comp:') ? key.slice(5) : null;
+      return el('section', { class: 'group' }, key ? groupHead(key, items) : null, ui.layout === 'gallery' ? gallery(sortIn(items, group)) : table(sortIn(items, group), group));
+    }),
   );
 }
 
+function compareValues(a, b) {
+  if (Array.isArray(a)) {
+    for (let i = 0; i < a.length; i++) {
+      const c = compareValues(a[i], b[i]);
+      if (c) return c;
+    }
+    return 0;
+  }
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function groupHead(key, models) {
-  const ig = models.find((m) => m.package?.igUrl)?.package;
+  const ig = ui.groupBy === 'composition' && !key.startsWith('Belgian') ? null : models.find((m) => m.package?.igUrl)?.package;
+  const comp = key.startsWith('comp:') ? state.catalog.compositions?.find((c) => `comp:${c.id}` === key) : null;
   return el(
     'div',
     { class: 'group-head' },
     el('h2', {}, ig?.igUrl && ui.groupBy === 'package'
       ? el('a', { href: ig.igUrl, target: '_blank', rel: 'noreferrer', class: 'ig-link', title: `${ig.id ?? ''} ${ig.version ?? ''} — ${ig.igUrl}` }, key, el('span', { class: 'ig-arrow', text: '↗' }))
-      : key),
+      : groupLabel(key)),
     el('span', { class: 'group-count', text: String(models.length) }),
-    ig?.version && ui.groupBy === 'package' ? el('span', { class: 'group-ig-title', text: `${ig.id ?? ''} ${ig.version}` }) : null,
+    ig?.version && ['package', 'composition'].includes(ui.groupBy) ? el('span', { class: 'group-ig-title', text: `${ig.id ?? ''} ${ig.version}` }) : null,
+    comp && (comp.description || comp.sections.some((x) => x.models.length)) ? el('span', { class: 'group-ig-title', text: comp.description ?? `${comp.sections.filter((x) => x.models.length).length} sections` }) : null,
   );
 }
 
 const COLUMNS = [
   { key: 'name', label: 'Model' },
+  { key: 'role', label: 'Role' },
   { key: 'package', label: 'Package' },
   { key: 'stage', label: 'Status' },
   { key: 'elementCount', label: 'Elements', class: 'num' },
@@ -306,7 +367,7 @@ const COLUMNS = [
   { key: null, label: '' },
 ];
 
-function table(models) {
+function table(models, group) {
   const cols = COLUMNS.filter((c) => !(ui.groupBy === 'package' && c.key === 'package'));
   const head = el(
     'tr',
@@ -328,7 +389,7 @@ function table(models) {
       ),
     ),
   );
-  return el('table', {}, el('thead', {}, head), el('tbody', {}, ...models.map((m) => row(m, cols))));
+  return el('table', {}, el('thead', {}, head), el('tbody', {}, ...models.map((m) => row(m, cols, group))));
 }
 
 function subtitle(m) {
@@ -337,7 +398,7 @@ function subtitle(m) {
   return '';
 }
 
-function row(m, cols) {
+function row(m, cols, group) {
   const cells = {
     name: el(
       'td',
@@ -355,6 +416,7 @@ function row(m, cols) {
         ),
       ),
     ),
+    role: el('td', {}, roleCell(m, group)),
     package: el('td', {}, m.package?.label ?? '—'),
     stage: el('td', {}, stageBadge(m.stage)),
     elementCount: el('td', { class: 'num', text: m.elementCount ?? '—' }),
@@ -364,6 +426,22 @@ function row(m, cols) {
     null: el('td', {}, el('div', { class: 'actions' }, el('button', { class: 'btn btn-sm', text: 'Open', onclick: () => openModel(m.key) }))),
   };
   return el('tr', { class: m.preferred ? null : 'is-superseded' }, ...cols.map((c) => cells[c.key]));
+}
+
+/** Role in a composition (the one of the group, else the first), tags; inherited for Belgian models. */
+function roleCell(m, group) {
+  const comps = m.place?.compositions ?? [];
+  const c = comps.find((x) => x.id === group) ?? comps[0];
+  const tier = c?.role ?? tierOf(m);
+  const title = [
+    ...comps.map((x) => `${TIER_LABEL[x.role]} of ${compositionTitle(x.id)}${x.section ? ` — ${x.section}` : ''}`),
+    m.place?.inherited ? `from the mapping of ${m.place.from.join(', ')}` : null,
+  ].filter(Boolean).join('\n');
+  return el('span', { class: 'role-cell', title: title || null },
+    el('span', { class: `tier-badge tier-${tier}${m.place?.inherited ? ' is-inherited' : ''}`, text: TIER_LABEL[tier] }),
+    c?.section ? el('span', { class: 'role-section', text: c.section }) : null,
+    comps.length > 1 && !group ? el('span', { class: 'muted', text: ` +${comps.length - 1}` }) : null,
+    ...(m.place?.tags ?? []).map((t) => el('span', { class: 'tag-badge', text: `#${t}` })));
 }
 
 /** EHDS: how far its best mapping is; Belgian: how many EHDS models map to it. */
@@ -414,7 +492,8 @@ function gallery(models) {
           { class: 'card-body' },
           el('div', { class: 'model-name' }, m.name, el('span', { class: 'side-badge', text: m.side.toUpperCase() })),
           el('div', { class: 'model-title', text: subtitle(m) }),
-          el('div', { class: 'row-between' }, stageBadge(m.stage), mappingCell(m)),
+          el('div', { class: 'row-between' }, stageBadge(m.stage), roleCell(m)),
+          el('div', {}, mappingCell(m)),
         ),
       ),
     ),
@@ -440,7 +519,7 @@ function closeDrawer() {
 
 function openFromHash() {
   const [kind, key, extra] = decodeURIComponent(location.hash.slice(1)).split('/');
-  if (kind === 'progress' && ['all', 'mapped'].includes(key)) ui.progressScope = key;
+  if (kind === 'progress' && key && (['all', 'mapped', 'core'].includes(key) || key.startsWith('comp:'))) ui.progressScope = key;
   if (['models', 'mappings', 'progress', 'profiles'].includes(kind)) return showView(kind);
   if (kind === 'model' && state.byKey.has(key)) openModel(key, { view: extra });
   if (kind === 'mapping') openMapping(key, extra);
@@ -606,6 +685,8 @@ function detailsList(m) {
       ['Title', m.title ?? '—'],
       ['Kind', m.kind === 'profile' ? `Profile of ${m.type}` : 'Logical model'],
       ['Package', `${m.package?.label ?? '—'}${m.package?.id ? ` (${m.package.id}${m.package.version ? `#${m.package.version}` : ''})` : ''}`],
+      ['Role', roleText(m)],
+      ['Tags', (m.place?.tags ?? []).map((t) => `#${t}`).join(' ') || '—'],
       ['Elements', String(m.elementCount ?? '—')],
       ['Version', m.version ?? '—'],
       ['Date', fmtDate(m.date)],
@@ -616,6 +697,13 @@ function detailsList(m) {
       ['Variants', m.variants ? `${m.variants.length} (${m.preferred ? 'this one prevails' : 'superseded'})` : '—'],
     ].flatMap(([k, v]) => [el('dt', { text: k }), el('dd', {}, v)]),
   );
+}
+
+function roleText(m) {
+  const comps = m.place?.compositions ?? [];
+  if (!comps.length) return TIER_LABEL[tierOf(m)];
+  return comps.map((c) => `${TIER_LABEL[c.role]} of ${compositionTitle(c.id)}${c.section ? ` (${c.section})` : ''}`).join('; ') +
+    (m.place.inherited ? ` — from the mapping of ${m.place.from.join(', ')}` : '');
 }
 
 // ---------------------------------------------------------------- mappings view
@@ -632,12 +720,32 @@ function wireMappingsToolbar() {
     setChildren(host, ...Object.entries(filters).map(([k, label]) =>
       el('button', { class: `chip${ui.mapFilter === k ? ' is-on' : ''}`, text: label, onclick: () => { ui.mapFilter = k; draw(); renderMappings(); } })));
   draw();
+  const comp = document.getElementById('map-composition');
+  setChildren(comp,
+    el('option', { value: 'all', text: 'All models' }),
+    el('option', { value: 'core', text: 'Focus and sections' }),
+    ...(state.catalog.compositions ?? []).map((c) => el('option', { value: c.id, text: c.title })),
+    el('option', { value: 'supporting', text: 'Supporting' }),
+    el('option', { value: 'component', text: 'Components' }));
+  comp.value = ui.mapComposition;
+  comp.addEventListener('change', () => {
+    ui.mapComposition = comp.value;
+    renderMappings();
+  });
+}
+
+function inScope(m, scope) {
+  if (scope === 'all') return true;
+  if (scope === 'core') return ['focus', 'section'].includes(tierOf(m));
+  if (scope === 'supporting' || scope === 'component') return tierOf(m) === scope;
+  return (m.place?.compositions ?? []).some((c) => c.id === scope);
 }
 
 function mappingRows(kind) {
   const q = ui.mapSearch;
   return state.comparison.models
     .filter((c) => c.kind === kind)
+    .filter((c) => kind !== 'logical' || inScope(c, ui.mapComposition))
     .filter((c) => !q || c.id.toLowerCase().includes(q) || c.mappings.some((g) => g.targetName.toLowerCase().includes(q)))
     .filter((c) => {
       switch (ui.mapFilter) {
@@ -648,6 +756,8 @@ function mappingRows(kind) {
         default: return true;
       }
     })
+    // the models that matter first (as on the Models tab), then mapped before unmapped
+    .sort((a, b) => compareValues(SORTERS.role(a, scopeGroup()), SORTERS.role(b, scopeGroup())) || Number(b.mapped) - Number(a.mapped))
     .flatMap((c) => (c.mappings.length ? c.mappings.map((g) => ({ model: c, mapping: g })) : [{ model: c, mapping: null }]));
 }
 
@@ -678,16 +788,17 @@ function mappingProblems() {
 }
 
 function mappingTable(rows) {
-  const head = el('tr', {}, ...['EHDS model', 'Belgian model', 'Progress', 'Mapped', 'No equivalent', 'Open', 'Remarks', 'Model changed', ''].map((h, i) => el('th', { class: `no-sort${i >= 3 && i <= 6 ? ' num' : ''}`, text: h })));
+  const head = el('tr', {}, ...['EHDS model', 'Role', 'Belgian model', 'Progress', 'Mapped', 'No equivalent', 'Open', 'Remarks', 'Model changed', ''].map((h, i) => el('th', { class: `no-sort${i >= 4 && i <= 7 ? ' num' : ''}`, text: h })));
   const body = rows.map(({ model: c, mapping: g }) => {
     if (!g) {
       return el('tr', { class: 'is-superseded' },
-        el('td', {}, el('a', { href: `#model/${encodeURIComponent(c.key)}`, text: c.id })), el('td', { text: '—' }),
+        el('td', {}, el('a', { href: `#model/${encodeURIComponent(c.key)}`, text: c.id })), el('td', {}, roleCell(c, scopeGroup())), el('td', { text: '—' }),
         el('td', {}, progressBar({ mapped: 0, noMap: 0 }, 1)), el('td', { class: 'num' }), el('td', { class: 'num' }),
         el('td', { class: 'num', text: c.elementCount }), el('td'), el('td'), el('td'));
     }
     return el('tr', {},
       el('td', {}, el('a', { href: `#model/${encodeURIComponent(c.key)}`, text: c.id })),
+      el('td', {}, roleCell(c, scopeGroup())),
       el('td', {}, g.targetKey ? el('a', { href: `#model/${encodeURIComponent(g.targetKey)}`, text: g.targetName }) : el('span', { title: g.target, text: `${g.targetName} (not fetched)` })),
       el('td', {}, el('span', { class: 'map-cell' }, progressBar(g.counts, c.elementCount), `${pct(g.counts.mapped + g.counts.noMap, c.elementCount)}%`)),
       el('td', { class: 'num', text: g.counts.mapped }),
@@ -699,6 +810,8 @@ function mappingTable(rows) {
   });
   return el('table', {}, el('thead', {}, head), el('tbody', {}, ...body));
 }
+
+const scopeGroup = () => (['all', 'core', 'supporting', 'component'].includes(ui.mapComposition) ? null : ui.mapComposition);
 
 function changesText(changes) {
   return changes
@@ -805,9 +918,39 @@ function renderProgress() {
       stat(now.remarks, 'remarks'),
       stat(state.comparison.summary.outdated ?? 0, 'mappings made against an older model')),
     progressChart(points),
+    compositionProgress(points[points.length - 1]),
     events(),
     el('p', { class: 'hint', text: 'One point per commit that changed mappings/ (date = commit date), compared with the current models. The versions each ConceptMap was made against are recorded per point; when they change it is listed as an event.' }),
   );
+}
+
+/** The totals of one point for a scope: all logical models, the core, or one composition. */
+function scopeTotals(p, scope) {
+  const empty = { models: 0, mappedModels: 0, elements: 0, mappedElements: 0, mapped: 0, noMap: 0, open: 0, remarks: 0 };
+  if (scope === 'core') return p.core ?? empty;
+  if (scope?.startsWith('comp:')) return p.compositions?.[scope.slice(5)] ?? empty;
+  return p.logical;
+}
+
+/** Per composition, today: how many models are mapped and how much is decided. */
+function compositionProgress(now) {
+  const comps = state.catalog.compositions ?? [];
+  if (!comps.length) return null;
+  const rows = [
+    ...comps.map((c) => [c.title, now.compositions?.[c.id], `comp:${c.id}`]),
+    ['Focus and section models', now.core, 'core'],
+    ['All EHDS logical models', now.logical, 'all'],
+  ];
+  return el('div', { class: 'chart-card' },
+    el('h3', { text: 'By composition' }),
+    el('div', { class: 'sub', text: 'The focus models and their first-level sections (compositions.json); the last rows add them up and count every model.' }),
+    el('table', {},
+      el('thead', {}, el('tr', {}, ...['', 'Models mapped', 'Decided', 'Mapped', 'No equivalent', 'Open', 'Remarks'].map((h, i) => el('th', { class: `no-sort${i ? ' num' : ''}`, text: h })))),
+      el('tbody', {}, ...rows.filter(([, t]) => t).map(([label, t, scope]) => el('tr', {},
+        el('td', {}, el('a', { href: `#progress/${scope}`, text: label })),
+        el('td', { class: 'num', text: `${t.mappedModels} / ${t.models}` }),
+        el('td', { class: 'num' }, el('span', { class: 'map-cell' }, progressBar(t, t.elements), `${pct(t.mapped + t.noMap, t.elements)}%`)),
+        el('td', { class: 'num', text: t.mapped }), el('td', { class: 'num', text: t.noMap }), el('td', { class: 'num', text: t.open }), el('td', { class: 'num', text: t.remarks }))))));
 }
 
 const SERIES = [
@@ -817,17 +960,19 @@ const SERIES = [
 
 function progressChart(points) {
   const scoped = (p) => {
-    const L = p.logical;
+    const L = scopeTotals(p, ui.progressScope);
     const total = ui.progressScope === 'mapped' ? L.mappedElements ?? L.elements : L.elements;
     return { ...L, total, open: Math.max(0, total - L.mapped - L.noMap) };
   };
-  const scopeSelect = el('select', { onchange: (e) => { ui.progressScope = e.target.value; renderProgress(); } },
+  const scopeSelect = el('select', { onchange: (e) => { ui.progressScope = e.target.value; history.replaceState(null, '', `#progress/${e.target.value}`); renderProgress(); } },
     el('option', { value: 'all', selected: ui.progressScope === 'all', text: 'All EHDS logical models' }),
+    el('option', { value: 'core', selected: ui.progressScope === 'core', text: 'Focus and section models' }),
+    ...(state.catalog.compositions ?? []).map((c) => el('option', { value: `comp:${c.id}`, selected: ui.progressScope === `comp:${c.id}`, text: c.title })),
     el('option', { value: 'mapped', selected: ui.progressScope === 'mapped', text: 'Only models with a mapping' }));
   const card = el('div', { class: 'chart-card' },
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' } },
       el('div', {},
-        el('h3', { text: 'EHDS logical model elements decided over time' }),
+        el('h3', { text: `${ui.progressScope.startsWith('comp:') ? compositionTitle(ui.progressScope.slice(5)) : ui.progressScope === 'core' ? 'Focus and section model' : 'EHDS logical model'} elements decided over time` }),
         el('div', { class: 'sub', text: 'Mapped to a Belgian element, or recorded as having no Belgian equivalent; the rest is open.' })),
       el('label', { class: 'field' }, el('span', { text: 'Out of' }), scopeSelect)),
     el('div', { class: 'chart-legend' },
@@ -937,10 +1082,10 @@ function tableView(points) {
   return el('details', { class: 'table-view' }, el('summary', { text: 'Table view' }),
     el('table', {},
       el('thead', {}, el('tr', {}, ...['Date', 'Commit', 'Change', 'Models mapped', 'Mapped', 'No equivalent', 'Open', 'Remarks'].map((h) => el('th', { class: 'no-sort', text: h })))),
-      el('tbody', {}, ...[...points].reverse().map((p) => el('tr', {},
+      el('tbody', {}, ...[...points].reverse().map((p) => [p, scopeTotals(p, ui.progressScope)]).map(([p, L]) => el('tr', {},
         el('td', { text: fmtDate(p.date) }), el('td', {}, p.commit ? el('code', { text: p.commit.slice(0, 7) }) : '—'), el('td', { text: p.subject }),
-        el('td', { class: 'num', text: `${p.logical.mappedModels} / ${p.logical.models}` }), el('td', { class: 'num', text: p.logical.mapped }),
-        el('td', { class: 'num', text: p.logical.noMap }), el('td', { class: 'num', text: p.logical.open }), el('td', { class: 'num', text: p.logical.remarks }))))));
+        el('td', { class: 'num', text: `${L.mappedModels} / ${L.models}` }), el('td', { class: 'num', text: L.mapped }),
+        el('td', { class: 'num', text: L.noMap }), el('td', { class: 'num', text: L.open }), el('td', { class: 'num', text: L.remarks }))))));
 }
 
 function events() {

@@ -38,11 +38,13 @@
           <input type="search" id="search" placeholder="Filter by name, title, package…" autocomplete="off" />
           <div class="chips" id="side-filter"></div>
           <div class="chips" id="kind-filter"></div>
+          <div class="chips" id="tier-filter" title="The place of a model (compositions.json): focus of a composition, a first-level section, supporting, a building block; Belgian models take the place of the EHDS model mapped to them"></div>
 
           <label class="field">
             <span>Group by</span>
             <select id="group-by">
-              <option value="package" selected>Package</option>
+              <option value="composition" selected>Composition</option>
+              <option value="package">Package</option>
               <option value="side">Side</option>
               <option value="stage">Status</option>
               <option value="none">Nothing</option>
@@ -84,6 +86,10 @@
         <div class="toolbar">
           <input type="search" id="map-search" placeholder="Filter by model…" autocomplete="off" />
           <div class="chips" id="map-filter"></div>
+          <label class="field">
+            <span>Models</span>
+            <select id="map-composition"></select>
+          </label>
           <div class="spacer"></div>
           <span class="hint" id="map-summary"></span>
         </div>

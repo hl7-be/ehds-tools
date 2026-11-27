@@ -7,9 +7,9 @@ It is built as a static site, published on GitHub Pages and previewed locally.
 
 | Tab | What it shows |
 |---|---|
-| **Models** | EHDS and Belgian models and profiles, as a table or gallery, grouped by package, side or status. Each model opens with a **tree view**, the **PlantUML (modelgram)** diagram, the **UML class diagram**, the **PlantUML source** of both, and the **JSON**, plus its mappings. |
+| **Models** | EHDS and Belgian models and profiles, as a table or gallery, grouped by composition (the models that matter first), package, side or status, filtered by role. Each model opens with a **tree view**, the **PlantUML (modelgram)** diagram, the **UML class diagram**, the **PlantUML source** of both, and the **JSON**, plus its mappings. |
 | **Mappings** | Per EHDS model: the Belgian model it is mapped to, how much is mapped, has no equivalent or is open, the remarks, and whether either model changed since the mapping. Each mapping opens with both diagrams side by side and every line. |
-| **Progress** | Elements decided over time (from the git history of `mappings/`), with the events where a mapping started or moved to another model version. |
+| **Progress** | Elements decided over time (from the git history of `mappings/`), for all models, the focus and section models, or one composition, with the events where a mapping started or moved to another model version. |
 | **Profiles** | The same comparison for profiles, once the EHDS repository publishes them. |
 
 ## Running it
@@ -30,6 +30,7 @@ SUSHI (`npm i -g fsh-sushi`) only when the EHDS models are built from source.
 | `node src/cli.js new-mapping <EHDS id> --target <Belgian id or url>` | Start a ConceptMap |
 | `node src/cli.js compare [--format md\|json] [--profiles]` | The comparison, in the terminal |
 | `node src/cli.js progress` | Progress over time, as JSON |
+| `node src/cli.js compositions` | Where each EHDS model is placed: focus, section, supporting, component |
 | `node src/cli.js site [--fetch]` | Build `site/` (renders, compares, progress) |
 | `node src/cli.js serve [--open] [--fetch] [--port n]` | Build and preview on localhost |
 
@@ -49,6 +50,7 @@ SUSHI (`npm i -g fsh-sushi`) only when the EHDS models are built from source.
 | `site` | built site | | `--site` |
 | `mappings.dir` | the ConceptMaps | `EHDS_MAPPINGS` | `--mappings` |
 | `mappings.canonical` | base url of new ConceptMaps | | |
+| `compositions` | the compositions file (below), default `compositions.json` | | |
 
 Options override environment variables, which override the file.
 
@@ -61,6 +63,23 @@ Belgian sources, as in `caresets.json`: `release` (`packageId`, `version` "lates
 one), `ci` (`from` = a build.fhir.org address, or `repo` + `branch`), `url` (one
 StructureDefinition). Optional: `package` (grouping label), `names` (only these). When the same
 model comes from two sources, the first one listed prevails; the other is shown as a variant.
+
+## Compositions
+
+Not every EHDS model matters on its own: `EHDSHumanName` is a building block, the Patient Summary
+is what is exchanged. [compositions.json](compositions.json) gives every EHDS model a role:
+
+| Role | Which models |
+|---|---|
+| **Focus** | the `focus` models of a composition, e.g. `EHDSPatientSummary`, `EHDSMedicationPrescription`, `EHDSMedicationDispense` |
+| **Section** | the first-level sections of a focus model: `"sections": "auto"` reads its `Section: ...` elements and the models in them (Alerts → `EHDSAlert`, Medical problems → `EHDSCondition`, ...); or list them, `["EHDSX", { "title": "...", "models": [...] }]` |
+| **Component** | listed in `components`: building blocks such as `EHDSHumanName`, `EHDSAddress` - hidden on the Models tab by default |
+| **Supporting** | every other EHDS model |
+
+`tags` adds free tags per model (EHDS or Belgian name), shown as `#tag` and searchable on the
+Models tab. A Belgian model takes the role of the EHDS model mapped to it. The roles sort and
+group the Models and Mappings tabs, and the Progress tab charts each composition on its own.
+`node src/cli.js compositions` shows the result, and names configured models that do not exist.
 
 ## Mappings
 
@@ -126,6 +145,7 @@ src/
   mappings.js         ConceptMaps: read, scaffold
   compare.js          mappings vs models, both sides
   progress.js         progress from git history
+  compositions.js     roles of the models: focus, section, supporting, component; tags
   report.js           Markdown report
   site.js             site build, local server
 public/               the site (CareSets stylesheet + ehds.css, app.js)

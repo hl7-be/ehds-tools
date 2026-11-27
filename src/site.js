@@ -4,6 +4,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runCompare } from './compare.js';
+import { loadCompositions } from './compositions.js';
 import { runProgress } from './progress.js';
 import { renderAll } from './render.js';
 import { toMarkdown } from './report.js';
@@ -13,7 +14,8 @@ const PUBLIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 
 /**
  * Build the static site published on GitHub Pages (and previewed with `serve`):
  *   index.html, app.js, styles.css, ehds.css     the front end (public/)
- *   data/catalog.json                            every model and profile, both sides
+ *   data/catalog.json                            every model and profile, both sides, with its
+ *                                                place (tier, compositions, tags: compositions.json)
  *   data/{ehds,be}/models|diagrams/...           StructureDefinitions, PlantUML, SVG
  *   data/comparison.json|.md                     the mappings compared with the models
  *   data/progress.json                           mapping progress over time (git history)
@@ -27,6 +29,7 @@ export async function buildSite(config, { log = console.error } = {}) {
   await cp(config.output, path.join(dir, 'data'), { recursive: true });
 
   const report = await runCompare(config);
+  await placeCatalog(path.join(dir, 'data', 'catalog.json'), report, await loadCompositions(config.compositions));
   await writeFile(path.join(dir, 'data', 'comparison.json'), JSON.stringify(report, null, 2) + '\n');
   await writeFile(path.join(dir, 'data', 'comparison.md'), toMarkdown(report));
   const progress = await runProgress(config, { log });
@@ -35,6 +38,20 @@ export async function buildSite(config, { log = console.error } = {}) {
   await writeFile(path.join(dir, '.nojekyll'), '');
   log(`site written to ${dir}`);
   return report;
+}
+
+/** Write the compositions into the site's catalog: place on every model, the compositions list. */
+async function placeCatalog(file, report, compositions) {
+  const catalog = JSON.parse(await readFile(file, 'utf8'));
+  const ehds = new Map(report.models.map((m) => [m.key, m.place]));
+  for (const m of catalog.models) {
+    const place = m.side === 'ehds' ? ehds.get(m.key) : report.placedTargets?.[m.key];
+    const tags = [...new Set([...(place?.tags ?? []), ...(compositions.tags[m.name] ?? compositions.tags[m.id] ?? [])])];
+    m.place = place ? { ...place, tags, inherited: m.side !== 'ehds' } : { tier: null, compositions: [], tags };
+  }
+  catalog.compositions = report.compositions.map(({ id, title, description, sections }) => ({ id, title, description, sections }));
+  catalog.unknownPlacements = report.unknownPlacements;
+  await writeFile(file, JSON.stringify(catalog, null, 2) + '\n');
 }
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.json': 'application/json; charset=utf-8', '.md': 'text/markdown; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png' };

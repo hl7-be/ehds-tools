@@ -19,6 +19,7 @@ const DEFAULTS = {
   },
   output: 'data', // fetched models and rendered diagrams
   site: 'site', // static site for GitHub Pages / local preview
+  compositions: 'compositions.json', // which models matter: compositions, sections, components, tags
   mappings: {
     dir: 'mappings', // ConceptMaps from the EHDS models to the Belgian models
     canonical: 'https://www.ehealth.fgov.be/standards/fhir/ehds/ConceptMap', // base for new ConceptMap urls
@@ -60,6 +61,7 @@ export async function loadConfig({ configFile, overrides = {}, env = process.env
     belgian: { ...DEFAULTS.belgian, ...defined(fromFile.belgian) },
     output: overrides.output ?? fromEnv.output ?? fromFile.output ?? DEFAULTS.output,
     site: overrides.site ?? fromFile.site ?? DEFAULTS.site,
+    compositions: overrides.compositions ?? fromFile.compositions ?? DEFAULTS.compositions,
     mappings: {
       ...DEFAULTS.mappings,
       ...defined(fromFile.mappings),
@@ -77,6 +79,7 @@ export async function loadConfig({ configFile, overrides = {}, env = process.env
   }
   config.output = path.resolve(config.output);
   config.site = path.resolve(config.site);
+  config.compositions = path.resolve(config.compositions);
   config.mappings.dir = path.resolve(config.mappings.dir);
   return config;
 }

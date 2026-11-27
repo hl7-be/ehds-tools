@@ -333,3 +333,52 @@ details.table-view summary {
   cursor: pointer;
   color: var(--accent);
 }
+
+/* place of a model: compositions.json */
+.role-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12px;
+}
+
+.tier-badge {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.tier-badge.tier-focus {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+.tier-badge.tier-section {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.tier-badge.tier-component,
+.tier-badge.tier-unplaced {
+  border-style: dashed;
+}
+
+.tier-badge.is-inherited {
+  opacity: 0.75;
+}
+
+.role-section {
+  color: var(--ink);
+}
+
+.tag-badge {
+  font-size: 11px;
+  color: var(--muted);
+}

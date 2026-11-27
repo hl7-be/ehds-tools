@@ -49,10 +49,10 @@ export async function runProgress(config, { log = console.error } = {}) {
 
 async function point(config, commit, maps) {
   const report = await runCompare(config, maps ? { maps } : {});
-  const totals = (kind) => {
+  const totals = (models) => {
     // elements: all EHDS elements; mappedElements: only those of models that have a mapping
     const t = { models: 0, mappedModels: 0, elements: 0, mappedElements: 0, mapped: 0, noMap: 0, open: 0, remarks: 0 };
-    for (const m of report.models.filter((x) => x.kind === kind)) {
+    for (const m of models) {
       t.models++;
       t.elements += m.elementCount;
       // several Belgian targets for one EHDS model: count the most complete one
@@ -70,12 +70,17 @@ async function point(config, commit, maps) {
     }
     return t;
   };
+  const logical = report.models.filter((x) => x.kind === 'logical');
+  const inComposition = (id) => logical.filter((m) => m.place?.compositions.some((c) => c.id === id));
   return {
     date: commit?.date ?? new Date().toISOString(),
     commit: commit?.sha ?? null,
     subject: commit?.subject ?? 'current state',
-    logical: totals('logical'),
-    profiles: totals('profile'),
+    logical: totals(logical),
+    profiles: totals(report.models.filter((x) => x.kind === 'profile')),
+    // the models that matter: focus and section models of any composition, and per composition
+    core: totals(logical.filter((m) => ['focus', 'section'].includes(m.place?.tier))),
+    compositions: Object.fromEntries((report.compositions ?? []).map((c) => [c.id, totals(inComposition(c.id))])),
     versions: report.models.flatMap((m) =>
       m.mappings.map((g) => ({ conceptMap: g.conceptMap.id, model: m.id, target: g.targetName, sourceVersion: g.sourceVersion ?? null, targetVersion: g.targetVersion ?? null })),
     ),

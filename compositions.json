@@ -1,0 +1,31 @@
+{
+  "$comment": "Which EHDS models matter. compositions: the focus models (shown first) and their first-level sections - 'auto' reads the focus model's 'Section: ...' elements, or list them: [\"EHDSX\", { \"title\": \"...\", \"models\": [...] }]. components: building blocks, hidden by default. tags: free tags per model (EHDS or Belgian name), searchable. Every other EHDS model is 'supporting'. Belgian models take the place of the EHDS models mapped to them.",
+  "compositions": [
+    {
+      "id": "patient-summary",
+      "title": "Patient Summary",
+      "focus": ["EHDSPatientSummary"],
+      "sections": "auto"
+    },
+    {
+      "id": "eprescription",
+      "title": "ePrescription and eDispensation",
+      "focus": ["EHDSMedicationPrescription", "EHDSMedicationDispense"],
+      "sections": []
+    }
+  ],
+  "components": [
+    "EHDSHumanName",
+    "EHDSAddress",
+    "EHDSTelecom",
+    "EHDSAttachment",
+    "EHDSDosage",
+    "EHDSAdministeredDosage"
+  ],
+  "tags": {
+    "EHDSDataSet": ["base"],
+    "EHDSDocument": ["base"],
+    "EHDSSearchMetadata": ["base"],
+    "EHDSDocumentSearchMetadata": ["base"]
+  }
+}

@@ -22,6 +22,8 @@ Commands:
   compare [--format md|json] [--profiles]
                             Which models have mappings, coverage, remarks, model changes (stdout)
   progress                  Mapping progress over time, from the git history of mappings/ (JSON)
+  compositions              Where each EHDS model is placed (compositions.json): focus, section,
+                            supporting, component
   site [--fetch]            Build the static site (as published on GitHub Pages)
   serve [--port <n>] [--open] [--fetch]
                             Build the site and preview it on http://localhost
@@ -116,6 +118,23 @@ async function main(argv) {
       if (values.format === 'json') process.stdout.write(JSON.stringify(report, null, 2) + '\n');
       else if (values.format === 'md') process.stdout.write(toMarkdown(report, { kind: values.profiles ? 'profile' : 'logical' }));
       else throw new Error('--format must be md or json');
+      return 0;
+    }
+
+    case 'compositions': {
+      const report = await runCompare(config);
+      const pad = (t, n) => String(t).padEnd(n);
+      for (const c of report.compositions) {
+        console.log(`${c.title} (${c.id})`);
+        for (const m of c.members) console.log(`  ${pad(m.role, 8)} ${pad(m.name, 32)} ${m.section ?? ''}`);
+      }
+      for (const tier of ['supporting', 'component']) {
+        const names = report.models.filter((m) => m.kind === 'logical' && m.place?.tier === tier).map((m) => m.id);
+        console.log(`${tier} (${names.length}): ${names.join(', ')}`);
+      }
+      const tagged = report.models.filter((m) => m.place?.tags.length);
+      if (tagged.length) console.log(`tags: ${tagged.map((m) => `${m.id} ${m.place.tags.map((t) => `#${t}`).join(' ')}`).join(', ')}`);
+      if (report.unknownPlacements.length) console.log(`not among the models: ${report.unknownPlacements.join(', ')}`);
       return 0;
     }
 
