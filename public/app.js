@@ -857,9 +857,12 @@ async function openMapping(modelKey, conceptMapId) {
       stat(g.counts.mapped, 'mapped'), stat(g.counts.noMap, 'no equivalent'), stat(g.counts.open, 'open'), stat(g.remarks.length, 'remarks')),
     el('div', { class: 'side-by-side' }, figure(src, 'EHDS'), figure(tgt, 'Belgian')),
     el('h3', { class: 'section-head', text: 'Lines' }),
+    g.csv ? el('p', { class: 'hint' }, 'Written in ', el('a', { href: `data/mappings/${encodeURIComponent(g.csv)}`, download: g.csv, text: g.csv }),
+      ...(editUrl(g.csv) ? [' · ', el('a', { href: editUrl(g.csv), target: '_blank', rel: 'noreferrer', text: 'edit on GitHub ↗' })] : []),
+      ' - change the CSV and run "ehds-tools maps"; the ConceptMap is generated from it.') : null,
     linesTable(c, g),
     el('dl', { class: 'meta' }, ...[
-      ['File', `mappings/${g.file}`],
+      ['File', g.csv ? `mappings/${g.csv} → mappings/${g.file}` : `mappings/${g.file}`],
       ['ConceptMap', g.conceptMap.url ?? g.conceptMap.id],
       ['Status', g.conceptMap.status ?? '—'],
       ['Date', fmtDate(g.conceptMap.date)],
@@ -867,6 +870,12 @@ async function openMapping(modelKey, conceptMapId) {
       ['Belgian model', `${g.target}${g.targetVersion ? ` | mapped against ${g.targetVersion}` : ''}${tgt ? ` (now ${tgt.version ?? '—'}, ${fmtDay(tgt.date)})` : ''}`],
     ].flatMap(([k, v]) => [el('dt', { text: k }), el('dd', { text: v })])),
   );
+}
+
+/** The CSV on GitHub (edit page), when the site knows its repository. */
+function editUrl(csv) {
+  const r = state.comparison.repo;
+  return r?.url && r.branch ? `${r.url}/edit/${r.branch}/${r.mappingsPath ? `${r.mappingsPath}/` : ''}${encodeURIComponent(csv)}` : null;
 }
 
 function stat(v, l) {
@@ -890,7 +899,7 @@ function linesTable(c, g) {
           el('td', {}, i === 0 ? el('code', { text: id }) : ''),
           el('td', {}, t?.code ? el('code', { text: t.code }) : l?.status === 'no-map' ? 'no equivalent' : '—'),
           el('td', { text: t?.relationship ?? '' }),
-          el('td', { class: 'remark', text: t?.comment ?? '' })));
+          el('td', { class: 'remark', text: t?.comment ?? (i === 0 ? l?.openComment : null) ?? '' })));
     });
     const extra = g.unknownElements.map((code) => el('tr', { class: 'st-open' }, el('td', {}, el('code', { text: code })), el('td', { colspan: 3, text: 'not in the EHDS model any more' })));
     setChildren(host, el('table', { class: 'lines-table' },

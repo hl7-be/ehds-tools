@@ -382,3 +382,8 @@ details.table-view summary {
   font-size: 11px;
   color: var(--muted);
 }
+
+/* mapping lines: room for the remark */
+.lines-table td.remark {
+  min-width: 260px;
+}

@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { modelElements } from './catalog.js';
+import { OPEN_COMMENT_URL } from './csv-mappings.js';
 
 /**
  * Mappings from the EHDS models (or profiles) to the Belgian ones are FHIR ConceptMaps
@@ -16,6 +17,9 @@ import { modelElements } from './catalog.js';
  *   element.noMap = true   no Belgian equivalent (with a remark: target without code,
  *                          relationship not-related-to, with a comment)
  *   element without target and without noMap: still to be mapped
+ *
+ * Usually generated from a CSV (src/csv-mappings.js) into mappings/generated/; hand-written
+ * ConceptMaps are read as well.
  */
 
 /** Read every ConceptMap (*.json) under dir, recursively. Missing dir = no mappings. */
@@ -69,8 +73,9 @@ export function mappingGroups(maps) {
         source: source.url ?? sourceScope.url,
         target: target.url ?? targetScope.url,
         // the model versions this mapping was made against
-        sourceVersion: source.version ?? sourceScope.version,
-        targetVersion: target.version ?? targetScope.version,
+        sourceVersion: g.sourceVersion ?? source.version ?? sourceScope.version,
+        targetVersion: g.targetVersion ?? target.version ?? targetScope.version,
+        csv: csvOf(file),
         elements: (g.element ?? []).map(lineOf),
       });
     }
@@ -89,7 +94,14 @@ function lineOf(el) {
   if (targets.some((t) => t.code)) status = 'mapped';
   else if (el.noMap || targets.length > 0) status = 'no-map';
   else status = 'open';
-  return { code: el.code, display: el.display ?? null, status, targets };
+  const openComment = (el.extension ?? []).find((x) => x.url === OPEN_COMMENT_URL)?.valueString ?? null;
+  return { code: el.code, display: el.display ?? null, status, targets, ...(openComment ? { openComment } : {}) };
+}
+
+/** generated/ConceptMap-<pair>.json -> <pair>.csv (the file to edit); null when hand-written. */
+function csvOf(file) {
+  const m = /^generated\/ConceptMap-(.+)\.json$/.exec(file);
+  return m ? `${m[1]}.csv` : null;
 }
 
 /**

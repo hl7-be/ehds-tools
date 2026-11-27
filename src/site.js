@@ -1,5 +1,5 @@
-import { spawn } from 'node:child_process';
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,7 @@ const PUBLIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 
  *                                                place (tier, compositions, tags: compositions.json)
  *   data/{ehds,be}/models|diagrams/...           StructureDefinitions, PlantUML, SVG
  *   data/comparison.json|.md                     the mappings compared with the models
+ *   data/mappings/*.csv                          the mapping CSVs, for download
  *   data/progress.json                           mapping progress over time (git history)
  */
 export async function buildSite(config, { log = console.error } = {}) {
@@ -30,6 +31,8 @@ export async function buildSite(config, { log = console.error } = {}) {
 
   const report = await runCompare(config);
   await placeCatalog(path.join(dir, 'data', 'catalog.json'), report, await loadCompositions(config.compositions));
+  report.repo = await repoInfo(config.mappings.dir);
+  await copyCsvs(config.mappings.dir, path.join(dir, 'data', 'mappings'));
   await writeFile(path.join(dir, 'data', 'comparison.json'), JSON.stringify(report, null, 2) + '\n');
   await writeFile(path.join(dir, 'data', 'comparison.md'), toMarkdown(report));
   const progress = await runProgress(config, { log });
@@ -38,6 +41,36 @@ export async function buildSite(config, { log = console.error } = {}) {
   await writeFile(path.join(dir, '.nojekyll'), '');
   log(`site written to ${dir}`);
   return report;
+}
+
+async function copyCsvs(from, to) {
+  let files = [];
+  try {
+    files = (await readdir(from)).filter((f) => f.toLowerCase().endsWith('.csv'));
+  } catch {}
+  if (!files.length) return;
+  await mkdir(to, { recursive: true });
+  for (const f of files) await cp(path.join(from, f), path.join(to, f));
+}
+
+/**
+ * Where the mappings live on GitHub, for the "edit on GitHub" links: from the Actions
+ * environment, else from the git remote and branch. Null when unknown.
+ */
+async function repoInfo(mappingsDir) {
+  const git = (...args) =>
+    new Promise((resolve) => execFile('git', args, { cwd: mappingsDir, windowsHide: true }, (err, out) => resolve(err ? null : out.trim())));
+  const root = await git('rev-parse', '--show-toplevel');
+  if (!root) return null;
+  const mappingsPath = path.relative(root, mappingsDir).split(path.sep).join('/');
+  let url = process.env.GITHUB_REPOSITORY ? `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${process.env.GITHUB_REPOSITORY}` : null;
+  if (!url) {
+    const remote = await git('remote', 'get-url', 'origin');
+    const m = remote && /github\.com[:/]([^/]+\/[^/.]+?)(\.git)?$/.exec(remote);
+    url = m ? `https://github.com/${m[1]}` : null;
+  }
+  const branch = process.env.GITHUB_REF_NAME || (await git('rev-parse', '--abbrev-ref', 'HEAD'));
+  return url ? { url, branch: branch === 'HEAD' ? null : branch, mappingsPath } : null;
 }
 
 /** Write the compositions into the site's catalog: place on every model, the compositions list. */

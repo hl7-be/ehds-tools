@@ -54,6 +54,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: npm test
+      - name: Check the mapping CSVs and their generated ConceptMaps
+        run: node src/cli.js maps --check
       - name: Install SUSHI (used when no published EHDS package is available)
         run: npm install -g fsh-sushi
       - name: Fetch, render, compare and build the site

@@ -30,11 +30,13 @@ export function compare(models, groups, targets = new Map()) {
         }
         const target = targets.get(g.target) ?? null;
         const targetKnown = target ? new Set(modelElements(target.sd).flatMap((e) => [e.id, e.path])) : null;
-        const remarks = g.elements.flatMap((l) =>
-          l.targets.filter((t) => t.comment).map((t) => ({ element: l.code, target: t.code, relationship: t.relationship, remark: t.comment })),
-        );
+        const remarks = g.elements.flatMap((l) => [
+          ...l.targets.filter((t) => t.comment).map((t) => ({ element: l.code, target: t.code, relationship: t.relationship, remark: t.comment })),
+          ...(l.openComment ? [{ element: l.code, target: null, relationship: null, remark: l.openComment }] : []),
+        ]);
         return {
           file: g.file,
+          csv: g.csv ?? null,
           conceptMap: g.conceptMap,
           target: g.target,
           targetKey: target?.entry.key ?? null,

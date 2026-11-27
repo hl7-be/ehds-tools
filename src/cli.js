@@ -5,7 +5,8 @@ import { parseArgs } from 'node:util';
 import { runCompare } from './compare.js';
 import { loadConfig } from './config.js';
 import { fetchAll, readCatalog, readModel } from './fetch.js';
-import { scaffoldConceptMap } from './mappings.js';
+import { modelElements } from './catalog.js';
+import { runMaps, scaffoldCsv } from './csv-mappings.js';
 import { runProgress } from './progress.js';
 import { renderAll } from './render.js';
 import { toMarkdown } from './report.js';
@@ -16,9 +17,13 @@ const USAGE = `Usage: ehds-tools <command> [options]
 Commands:
   fetch [--only ehds|be]    Fetch the EHDS models (configured repository) and the Belgian models
   render                    Write the PlantUML of every model (modelgram and UML) and render SVGs
-  new-mapping <EHDS id> --target <Belgian id or url>
-                            Create a ConceptMap with every EHDS element listed, nothing mapped,
-                            and the versions of both models recorded
+  new-mapping <EHDS id> --target <Belgian id>
+                            Start a mapping: mappings/<EHDS>--<BE>.csv with every EHDS element
+                            listed (open), and its ConceptMap with both model versions
+  maps [--check] [--remap <file>] [csv files]
+                            Generate mappings/generated/ConceptMap-*.json from the CSVs;
+                            --check only reports (fails when out of date or a CSV is wrong);
+                            --remap moves a mapping to the current model versions
   compare [--format md|json] [--profiles]
                             Which models have mappings, coverage, remarks, model changes (stdout)
   progress                  Mapping progress over time, from the git history of mappings/ (JSON)
@@ -55,6 +60,8 @@ async function main(argv) {
       site: { type: 'string' },
       only: { type: 'string' },
       target: { type: 'string' },
+      check: { type: 'boolean' },
+      remap: { type: 'string', multiple: true },
       format: { type: 'string', default: 'md' },
       profiles: { type: 'boolean' },
       fetch: { type: 'boolean' },
@@ -92,25 +99,54 @@ async function main(argv) {
 
     case 'new-mapping': {
       const [model] = args;
-      if (!model || !values.target) throw new Error('usage: ehds-tools new-mapping <EHDS model id> --target <Belgian model id or canonical url>');
+      if (!model || !values.target) throw new Error('usage: ehds-tools new-mapping <EHDS model id> --target <Belgian model id>');
       const catalog = await readCatalog(config.output);
       const source = catalog.models.find((m) => m.side === 'ehds' && m.preferred && (m.id === model || m.name === model));
       if (!source) throw new Error(`EHDS model ${model} not found - check the id or run "ehds-tools fetch"`);
       const target = catalog.models.find((m) => m.side === 'be' && m.preferred && [m.id, m.name, m.url].includes(values.target));
-      if (!target && !/^https?:\/\//.test(values.target)) throw new Error(`Belgian model ${values.target} not found - give its id or canonical url`);
-      if (!target) console.error(`warning: ${values.target} is not a fetched Belgian model; its version is not recorded`);
-      const cm = scaffoldConceptMap({
-        source: { sd: await readModel(config.output, source), entry: source },
-        target: target ? { entry: target } : { url: values.target },
-        canonical: config.mappings.canonical,
-      });
-      const file = path.join(config.mappings.dir, `ConceptMap-${cm.id}.json`);
+      if (!target) throw new Error(`Belgian model ${values.target} not found - give its name or id, or run "ehds-tools fetch"`);
+      const name = `${source.name}--${target.name}.csv`;
+      const file = path.join(config.mappings.dir, name);
       await mkdir(config.mappings.dir, { recursive: true });
-      await writeFile(file, JSON.stringify(cm, null, 2) + '\n', { flag: 'wx' }).catch((err) => {
+      const sd = await readModel(config.output, source);
+      await writeFile(file, scaffoldCsv(sd), { flag: 'wx' }).catch((err) => {
         throw err.code === 'EEXIST' ? new Error(`${file} already exists`) : err;
       });
-      console.log(`${file}: ${cm.group[0].element.length} elements to map (EHDS ${cm.sourceScopeCanonical}, BE ${cm.targetScopeCanonical})`);
+      const { errors } = await runMaps({ dir: config.mappings.dir, canonical: config.mappings.canonical, models: catalog.models, only: [name], log: () => {} });
+      if (errors.length) throw new Error(errors.join('\n'));
+      console.log(`${file}: ${modelElements(sd).length} elements to map (EHDS ${source.version ?? '?'}, BE ${target.version ?? '?'})`);
+      console.log(`fill in relationship, targetCode and comment, then run "ehds-tools maps"`);
       return 0;
+    }
+
+    case 'maps': {
+      let catalog = null;
+      try {
+        catalog = await readCatalog(config.output);
+      } catch {
+        console.error('no fetched models: element codes are not checked');
+      }
+      const sets = new Map();
+      const elementsOf = catalog
+        ? async (entry) => {
+            if (!sets.has(entry.key)) sets.set(entry.key, new Set(modelElements(await readModel(config.output, entry)).flatMap((e) => [e.id, e.path])));
+            return sets.get(entry.key);
+          }
+        : null;
+      const { results, errors, warnings } = await runMaps({
+        dir: config.mappings.dir,
+        canonical: config.mappings.canonical,
+        models: catalog?.models ?? [],
+        elementsOf,
+        check: values.check,
+        remap: values.remap ?? [],
+        only: args.length ? args.map((a) => path.basename(a)) : null,
+      });
+      for (const w of warnings) console.error(`warning: ${w}`);
+      for (const e of errors) console.error(`error: ${e}`);
+      const csvs = results.filter((r) => r.csv);
+      console.log(`${csvs.length} mapping CSV${csvs.length === 1 ? '' : 's'}: ${['new', 'updated', 'remapped', 'ok', 'error'].map((k) => [k, csvs.filter((r) => r.status === k).length]).filter(([, n]) => n).map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`);
+      return errors.length ? 1 : 0;
     }
 
     case 'compare': {
